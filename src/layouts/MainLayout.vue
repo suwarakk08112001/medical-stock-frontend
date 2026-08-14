@@ -12,10 +12,8 @@
         />
 
         <q-toolbar-title>
-          Quasar App
+          ระบบคลังยาโรงพยาบาลปะเหลียน
         </q-toolbar-title>
-
-        <div>Quasar v{{ $q.version }}</div>
       </q-toolbar>
     </q-header>
 
@@ -25,10 +23,8 @@
       bordered
     >
       <q-list>
-        <q-item-label
-          header
-        >
-          Essential Links
+        <q-item-label header>
+          เมนูหลัก
         </q-item-label>
 
         <EssentialLink
@@ -51,46 +47,34 @@ import EssentialLink, { type EssentialLinkProps } from '@/components/EssentialLi
 
 const linksList: EssentialLinkProps[] = [
   {
-    label: 'Docs',
-    caption: 'quasar.dev',
-    icon: 'school',
-    link: 'https://quasar.dev'
+    label: 'แดชบอร์ด',
+    caption: 'ภาพรวมระบบ',
+    icon: 'insights',
+    to: '/second'
   },
   {
-    label: 'Github',
-    caption: 'github.com/quasarframework',
-    icon: 'code',
-    link: 'https://github.com/quasarframework'
+    label: 'คลังยา',
+    caption: 'รายการยาคงคลัง',
+    icon: 'medication',
+    to: '/stock'
   },
   {
-    label: 'Discord Chat Channel',
-    caption: 'chat.quasar.dev',
-    icon: 'chat',
-    link: 'https://chat.quasar.dev'
+    label: 'รับยาเข้าคลัง',
+    caption: 'บันทึกการรับยา',
+    icon: 'inventory_2',
+    to: '/stock-in'
   },
   {
-    label: 'Forum',
-    caption: 'forum.quasar.dev',
-    icon: 'record_voice_over',
-    link: 'https://forum.quasar.dev'
+    label: 'เบิกจ่ายยา',
+    caption: 'บันทึกการเบิกจ่าย',
+    icon: 'outbound',
+    to: '/stock-out'
   },
   {
-    label: 'Twitter',
-    caption: '@quasarframework',
-    icon: 'rss_feed',
-    link: 'https://twitter.quasar.dev'
-  },
-  {
-    label: 'Facebook',
-    caption: '@QuasarFramework',
-    icon: 'public',
-    link: 'https://facebook.quasar.dev'
-  },
-  {
-    label: 'Quasar Awesome',
-    caption: 'Community Quasar projects',
-    icon: 'favorite',
-    link: 'https://awesome.quasar.dev'
+    label: 'รายงาน',
+    caption: 'สรุปรายงานคลังยา',
+    icon: 'summarize',
+    to: '/reports'
   }
 ];
 

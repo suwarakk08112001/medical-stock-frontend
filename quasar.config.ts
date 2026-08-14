@@ -12,7 +12,8 @@ export default defineConfig((ctx) => {
     // --> boot files are part of "main.js"
     // https://v2.quasar.dev/quasar-cli-vite/boot-files
     boot: [
-      'i18n'
+      'i18n',
+      'axios'
     ],
 
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#css
@@ -84,7 +85,14 @@ export default defineConfig((ctx) => {
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#devserver
     devServer: {
       // https: true,
+      port: 9001,
       open: true // opens browser window automatically
+    },
+
+    electron: {
+      contentSecurityPolicy: {
+        'connect-src': ["'self'", "ws://localhost:*", "http://localhost:3007"]
+      }
     },
 
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#framework

@@ -135,6 +135,72 @@
       </div>
     </div>
 
+    <!-- ===================== MONTHLY TREND (dvalue) ===================== -->
+    <div class="q-px-md q-mt-md">
+      <q-card class="trend-card" flat bordered>
+        <q-card-section class="trend-header">
+          <div class="trend-title-group">
+            <div class="trend-title">
+              <q-icon name="show_chart" size="20px" />
+              <span>แนวโน้มมูลค่าจ่ายออกรายเดือน</span>
+            </div>
+            <div class="trend-subtitle">{{ currentFiscalLabel }} · รายเดือนตามปีงบประมาณ</div>
+          </div>
+          <div class="trend-threshold-legend">
+            <span class="trend-threshold-chip">
+              <span class="trend-threshold-dot trend-threshold-dot--high"></span>
+              ≥ ค่าเฉลี่ย
+            </span>
+            <span class="trend-threshold-chip">
+              <span class="trend-threshold-dot trend-threshold-dot--low"></span>
+              &lt; ค่าเฉลี่ย
+            </span>
+          </div>
+        </q-card-section>
+
+        <q-separator />
+
+        <q-card-section v-if="tdMonthlyLoading" class="rank-state">
+          <q-spinner-dots color="primary" size="36px" />
+          <div class="text-caption text-grey-6 q-mt-sm">กำลังโหลดข้อมูล...</div>
+        </q-card-section>
+
+        <q-card-section v-else-if="tdMonthlyHasError" class="rank-state">
+          <q-icon name="error_outline" size="32px" color="negative" />
+          <div class="text-caption text-grey-7 q-mt-sm">โหลดข้อมูลไม่สำเร็จ</div>
+          <q-btn flat dense color="primary" label="ลองใหม่" class="q-mt-sm" @click="fetchTdMonthlyData" />
+        </q-card-section>
+
+        <q-card-section v-else-if="!tdMonthlyItems.length" class="rank-state">
+          <q-icon name="inbox" size="32px" color="grey-5" />
+          <div class="text-caption text-grey-6 q-mt-sm">ไม่มีข้อมูลในช่วงเวลานี้</div>
+        </q-card-section>
+
+        <q-card-section v-else class="trend-chart-section">
+          <div class="row q-col-gutter-lg trend-row">
+            <!-- LEFT: line chart -->
+            <div class="col-12 col-md-7">
+              <div class="trend-chart-wrap">
+                <div class="trend-reveal" :class="{ 'trend-reveal--in': tdMonthlyChartReady }">
+                  <canvas ref="tdMonthlyChartRef"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <!-- RIGHT: donut (Chart.js legend built-in, same as TTR/นำเข้า ด้านล่าง) -->
+            <div class="col-12 col-md-5">
+              <div class="trend-donut-title">สัดส่วนมูลค่ารายเดือน</div>
+              <div class="trend-donut-wrap trend-donut-wrap--tall">
+                <div class="trend-donut-reveal" :class="{ 'trend-donut-reveal--in': tdMonthlyDonutReady }">
+                  <canvas ref="tdMonthlyDonutRef"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+        </q-card-section>
+      </q-card>
+    </div>
+
     <!-- ===================== TOP 10 SIDE-BY-SIDE ===================== -->
     <div class="q-px-md q-mt-md q-mb-lg">
       <div class="row q-col-gutter-md top-ten-row">
@@ -179,7 +245,10 @@
                     <div class="rank-pill-track">
                       <div
                         class="rank-pill-fill rank-pill-fill--teal"
-                        :style="{ width: Math.max(ttrBarPercent(item.ttr), 8) + '%' }"
+                        :style="{
+                          width: (ttrBarsReady ? Math.max(ttrBarPercent(item.ttr), 8) : 0) + '%',
+                          transitionDelay: (idx * 90) + 'ms'
+                        }"
                       >
                         <span v-if="ttrBarPercent(item.ttr) > 22" class="rank-pill-value rank-pill-value--inside">
                           {{ formatNumber(item.ttr) }}
@@ -223,11 +292,11 @@
               <div class="rank-title-group">
                 <div class="rank-title">
                   <q-icon name="local_shipping" size="20px" />
-                  <span>Top 10 ยาที่จ่ายออกมากที่สุด</span>
+                  <span>Top 10 ยาที่นำเข้ามากที่สุด</span>
                 </div>
                 <div class="rank-subtitle">{{ dispensedSubLabel }}</div>
               </div>
-              <div class="rank-badge rank-badge--coral">จ่ายออก</div>
+              <div class="rank-badge rank-badge--coral">นำเข้า</div>
             </q-card-section>
 
             <q-separator />
@@ -257,7 +326,10 @@
                     <div class="rank-pill-track">
                       <div
                         class="rank-pill-fill rank-pill-fill--coral"
-                        :style="{ width: Math.max(dispensedBarPercent(item.tr), 8) + '%' }"
+                        :style="{
+                          width: (dispensedBarsReady ? Math.max(dispensedBarPercent(item.tr), 8) : 0) + '%',
+                          transitionDelay: (idx * 90) + 'ms'
+                        }"
                       >
                         <span v-if="dispensedBarPercent(item.tr) > 22" class="rank-pill-value rank-pill-value--inside">
                           {{ formatNumber(item.tr) }}
@@ -275,11 +347,11 @@
                       >
                         <div class="rank-tooltip-title">{{ item.drugitem?.name ?? item.icode }}</div>
                         <div v-if="item.drugitem?.strength" class="rank-tooltip-line">ขนาด: {{ item.drugitem.strength }}</div>
-                        <div class="rank-tooltip-line">จำนวน: {{ formatNumber(item.tr) }}</div>
-                        <div class="rank-tooltip-line">มูลค่าจ่ายออก: {{ formatNumber(item.rvalue) }} บาท</div>
+                        <div class="rank-tooltip-line">จำนวน: {{ formatNumber(item.tr) }} {{ item.unit }}</div>
+                        <div class="rank-tooltip-line">มูลค่านำเข้า: {{ formatNumber(item.rvalue) }} บาท</div>
                       </q-tooltip>
                     </div>
-                   
+
                   </div>
                 </div>
               </q-card-section>
@@ -343,8 +415,18 @@ interface TopTenTrItem {
   id: number;
   icode: string;
   tr: number;
+  unit: string;
   rvalue: number;
   drugitem?: DrugItemInfo | null;
+}
+
+interface TdMonthlyItem {
+  yearmonth: string;
+  'ปีงบประมาณ': number;
+  'เดือน': string;
+  'จำนวนรายการ': number;
+  td: number;
+  dvalue: number;
 }
 
 const loading = ref(true);
@@ -355,6 +437,10 @@ const drugValue = ref(0);
 
 const balanceDisplay = ref('0');
 const drugDisplay = ref('0');
+
+// ควบคุมจังหวะ "ไหล" ของแท่ง pill bar แต่ละฝั่ง
+const ttrBarsReady = ref(false);
+const dispensedBarsReady = ref(false);
 
 function toBuddhistYear(gYear: number) {
   return gYear + 543;
@@ -433,6 +519,7 @@ function onFiscalYearChange() {
   fetchDashboardData();
   fetchTtrData();
   fetchDispensedData();
+  fetchTdMonthlyData();
 }
 
 function onMonthChange() {
@@ -526,6 +613,211 @@ async function fetchDashboardData() {
   }
 }
 
+// ===================== MONTHLY TREND (dvalue) =====================
+const tdMonthlyLoading = ref(true);
+const tdMonthlyHasError = ref(false);
+const tdMonthlyItems = ref<TdMonthlyItem[]>([]);
+const tdMonthlyChartRef = ref<HTMLCanvasElement | null>(null);
+let tdMonthlyChartInstance: Chart | null = null;
+const tdMonthlyDonutRef = ref<HTMLCanvasElement | null>(null);
+let tdMonthlyDonutInstance: Chart | null = null;
+// ควบคุมจังหวะ "ไหล" ของกราฟ/โดนัทด้วย CSS transition ล้วนๆ (แพทเทิร์นเดียวกับ rank-pill-fill ที่ใช้อยู่แล้วในหน้านี้)
+// เพื่อไม่ต้องพึ่งอนิเมชันภายในของ Chart.js ซึ่งอาจล้มเหลวเงียบๆ ได้ตามลักษณะข้อมูล
+const tdMonthlyChartReady = ref(false);
+const tdMonthlyDonutReady = ref(false);
+
+// สีสองโทนตามเกณฑ์ค่าเฉลี่ย: แดง = เดือนที่ >= ค่าเฉลี่ย, เหลืองอำพัน = เดือนที่ < ค่าเฉลี่ย
+const trendHighColor = '#e2384a';
+const trendHighFill = 'rgba(226, 56, 74, 0.16)';
+const trendLowColor = '#e2a63d';
+const trendLowFill = 'rgba(226, 166, 61, 0.22)';
+
+const tdMonthlyAverage = computed(() => {
+  const vals = tdMonthlyItems.value.map((i) => i.dvalue || 0);
+  if (!vals.length) return 0;
+  return vals.reduce((sum, v) => sum + v, 0) / vals.length;
+});
+
+async function fetchTdMonthlyData() {
+  tdMonthlyLoading.value = true;
+  tdMonthlyHasError.value = false;
+  tdMonthlyChartReady.value = false;
+  tdMonthlyDonutReady.value = false;
+
+  try {
+    const params: Record<string, number> = { financialYear: fiscalYear.value };
+    const res = await api.get<TdMonthlyItem[]>('/dashboard/Dvaluemonthly', { params });
+    tdMonthlyItems.value = res.data ?? [];
+    tdMonthlyLoading.value = false;
+    await nextTick();
+    renderTdMonthlyChart();
+    renderDonut(
+      tdMonthlyDonutRef,
+      tdMonthlyDonutInstance,
+      tdMonthlyItems.value.map((i) => i['เดือน']),
+      tdMonthlyItems.value.map((i) => i.dvalue),
+      tdMonthlyItems.value.map((i) => ((i.dvalue || 0) >= tdMonthlyAverage.value ? trendHighColor : trendLowColor)),
+      (inst) => (tdMonthlyDonutInstance = inst),
+      { clockwiseSweep: true }
+    );
+
+    // รอ 2 เฟรมก่อนค่อยเซ็ต ready เพื่อให้ CSS transition ทำงานจริง (จากสถานะซ่อน -> เผย)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        tdMonthlyChartReady.value = true;
+        tdMonthlyDonutReady.value = true;
+      });
+    });
+  } catch (err) {
+    console.error('Failed to fetch Tdmonthly:', err);
+    tdMonthlyHasError.value = true;
+  } finally {
+    tdMonthlyLoading.value = false;
+  }
+}
+
+function renderTdMonthlyChart() {
+  if (!tdMonthlyChartRef.value) return;
+  if (tdMonthlyChartInstance) {
+    tdMonthlyChartInstance.destroy();
+    tdMonthlyChartInstance = null;
+  }
+
+  const ctx = tdMonthlyChartRef.value.getContext('2d');
+  if (!ctx) return;
+
+  const labels = tdMonthlyItems.value.map((i) => i['เดือน']);
+  const data = tdMonthlyItems.value.map((i) => i.dvalue);
+  const avg = tdMonthlyAverage.value;
+  const pointColors = data.map((v) => ((v || 0) >= avg ? trendHighColor : trendLowColor));
+
+  // ไล่สีแนวตั้งตามตำแหน่งพิกเซลของเส้นค่าเฉลี่ย เพื่อให้พื้นที่/เส้นเปลี่ยนสีตรงจุดตัดเกณฑ์พอดี
+  function verticalSplitColor(
+    chart: Chart,
+    colorAbove: string,
+    colorBelow: string
+  ): CanvasGradient | string {
+    const { chartArea, scales } = chart;
+    if (!chartArea || !scales.y) return colorBelow;
+    const gradient = ctx!.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+    const avgY = scales.y.getPixelForValue(avg);
+    const ratio = Math.min(Math.max((avgY - chartArea.top) / (chartArea.bottom - chartArea.top), 0), 1);
+    gradient.addColorStop(0, colorAbove);
+    gradient.addColorStop(Math.max(ratio - 0.0001, 0), colorAbove);
+    gradient.addColorStop(Math.min(ratio + 0.0001, 1), colorBelow);
+    gradient.addColorStop(1, colorBelow);
+    return gradient;
+  }
+
+  const config: ChartConfiguration<'line'> = {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'มูลค่าจ่ายออก (บาท)',
+          data,
+          borderColor: (chartCtx) => verticalSplitColor(chartCtx.chart, trendHighColor, trendLowColor),
+          backgroundColor: (chartCtx) => verticalSplitColor(chartCtx.chart, trendHighFill, trendLowFill),
+          pointBackgroundColor: '#ffffff',
+          pointBorderColor: pointColors,
+          pointBorderWidth: 2,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          pointHoverBackgroundColor: pointColors,
+          pointHoverBorderColor: '#ffffff',
+          borderWidth: 2.5,
+          fill: 'origin',
+          tension: 0.35,
+          order: 1,
+        },
+        {
+          label: 'ค่าเฉลี่ย',
+          data: labels.map(() => avg),
+          borderColor: '#7d1c28',
+          borderDash: [6, 5],
+          borderWidth: 1.5,
+          pointRadius: 0,
+          pointHoverRadius: 0,
+          fill: false,
+          tension: 0,
+          order: 0,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      animation: {
+        duration: 500,
+        easing: 'easeOutQuart',
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#430d16',
+          titleFont: { size: 13, weight: 'bold' },
+          bodyFont: { size: 12 },
+          padding: 10,
+          cornerRadius: 8,
+          filter: (item) => item.datasetIndex === 0,
+          callbacks: {
+            title: (items) => {
+              const idx = items[0]?.dataIndex ?? 0;
+              return tdMonthlyItems.value[idx]?.['เดือน'] ?? '';
+            },
+            label: (item) => {
+              const idx = item.dataIndex;
+              const row = tdMonthlyItems.value[idx];
+              const lines = [`มูลค่า: ${formatNumber(item.parsed.y as number, 2)} บาท`];
+              if (row) {
+                lines.push(`จำนวนรายการ: ${formatNumber(row['จำนวนรายการ'])}`);
+                lines.push(`td: ${formatNumber(row.td)}`);
+              }
+              return lines;
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { font: { size: 11 }, color: '#8b988f' },
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: '#eef1ef' },
+          ticks: {
+            font: { size: 11 },
+            color: '#8b988f',
+            callback: (val) => formatNumber(Number(val)),
+          },
+        },
+      },
+    },
+    plugins: [
+      {
+        id: 'avgLabel',
+        afterDraw(chartInstance) {
+          const { scales, ctx: c, chartArea } = chartInstance;
+          if (!scales.y || !chartArea) return;
+          const y = scales.y.getPixelForValue(avg);
+          c.save();
+          c.font = '600 11px "IBM Plex Sans Thai", sans-serif';
+          c.fillStyle = '#7d1c28';
+          c.textAlign = 'right';
+          c.textBaseline = 'bottom';
+          c.fillText(`ค่าเฉลี่ย ${formatNumber(avg)}`, chartArea.right - 4, y - 4);
+          c.restore();
+        },
+      },
+    ],
+  };
+
+  tdMonthlyChartInstance = new Chart(ctx, config);
+}
+
 // ===================== LEFT: TOP 10 TTR =====================
 const ttrLoading = ref(true);
 const ttrHasError = ref(false);
@@ -550,6 +842,7 @@ const ttrSubLabel = computed(() => {
 async function fetchTtrData() {
   ttrLoading.value = true;
   ttrHasError.value = false;
+  ttrBarsReady.value = false; // รีเซ็ตก่อนโหลดข้อมูลใหม่ ให้แท่งเริ่มจาก 0% ทุกครั้ง
 
   try {
     const params: Record<string, number> = { financialYear: fiscalYear.value };
@@ -559,7 +852,22 @@ async function fetchTtrData() {
     ttrItems.value = dedupeByIcode(res.data ?? []);
     ttrLoading.value = false;
     await nextTick();
-    renderDonut(ttrDonutRef, ttrDonutInstance, ttrItems.value.map((i) => i.drugitem?.name ?? i.icode), ttrItems.value.map((i) => i.ttr), tealShades, (inst) => (ttrDonutInstance = inst));
+
+    // รอ 2 เฟรมก่อนค่อยเซ็ต ready เพื่อให้ CSS transition ทำงาน (จาก width: 0% -> ค่าจริง)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        ttrBarsReady.value = true;
+      });
+    });
+
+    renderDonut(
+      ttrDonutRef,
+      ttrDonutInstance,
+      ttrItems.value.map((i) => i.drugitem?.name ?? i.icode),
+      ttrItems.value.map((i) => i.ttr),
+      tealShades,
+      (inst) => (ttrDonutInstance = inst)
+    );
   } catch (err) {
     console.error('Failed to fetch TopTenTtr:', err);
     ttrHasError.value = true;
@@ -568,7 +876,7 @@ async function fetchTtrData() {
   }
 }
 
-// ===================== RIGHT: TOP 10 TR (จ่ายออก) =====================
+// ===================== RIGHT: TOP 10 TR (จ่ายออก / นำเข้า) =====================
 const dispensedLoading = ref(true);
 const dispensedHasError = ref(false);
 const dispensedItems = ref<TopTenTrItem[]>([]);
@@ -592,6 +900,7 @@ const dispensedSubLabel = computed(() => {
 async function fetchDispensedData() {
   dispensedLoading.value = true;
   dispensedHasError.value = false;
+  dispensedBarsReady.value = false; // รีเซ็ตก่อนโหลดข้อมูลใหม่ ให้แท่งเริ่มจาก 0% ทุกครั้ง
 
   try {
     const params: Record<string, number> = { financialYear: fiscalYear.value };
@@ -601,7 +910,22 @@ async function fetchDispensedData() {
     dispensedItems.value = dedupeByIcode(res.data ?? []);
     dispensedLoading.value = false;
     await nextTick();
-    renderDonut(dispensedDonutRef, dispensedDonutInstance, dispensedItems.value.map((i) => i.drugitem?.name ?? i.icode), dispensedItems.value.map((i) => i.tr), coralShades, (inst) => (dispensedDonutInstance = inst));
+
+    // รอ 2 เฟรมก่อนค่อยเซ็ต ready เพื่อให้ CSS transition ทำงาน (จาก width: 0% -> ค่าจริง)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        dispensedBarsReady.value = true;
+      });
+    });
+
+    renderDonut(
+      dispensedDonutRef,
+      dispensedDonutInstance,
+      dispensedItems.value.map((i) => i.drugitem?.name ?? i.icode),
+      dispensedItems.value.map((i) => i.tr),
+      coralShades,
+      (inst) => (dispensedDonutInstance = inst)
+    );
   } catch (err) {
     console.error('Failed to fetch TopTentr:', err);
     dispensedHasError.value = true;
@@ -627,7 +951,8 @@ function renderDonut(
   rawLabels: string[],
   data: number[],
   shades: string[],
-  setInstance: (inst: Chart | null) => void
+  setInstance: (inst: Chart | null) => void,
+  opts: { clockwiseSweep?: boolean } = {}
 ) {
   if (!canvasRefObj.value) return;
   if (existingInstance) {
@@ -639,6 +964,40 @@ function renderDonut(
   if (!ctx) return;
 
   const labels = rawLabels.map((l) => truncateLabel(l, 18));
+  // เรียง delay ตามสไลซ์ที่มีค่าจริง (>0) เท่านั้น ไม่นับสไลซ์ค่า 0 ซึ่งกว้าง 0 องศาอยู่แล้วมองไม่เห็น
+  // ป้องกันกรณีข้อมูลมีค่า 0 ติดกันหลายรายการ ไม่ให้ delay ไปกินเวลาว่างเปล่าก่อนสไลซ์จริงจะโผล่
+  const visibleOrder = data.reduce<number[]>((arr, v, idx) => {
+    if ((v || 0) > 0) arr.push(idx);
+    return arr;
+  }, []);
+
+  // "ม่านเผย" ตามเข็มนาฬิกาแบบ manual (ไม่พึ่งอนิเมชัน circumference/endAngle ของ Chart.js เลย)
+  // วาดโดนัทให้เสร็จสมบูรณ์ทันที แล้วค่อยๆ เปิด clip เป็นรูปพายจาก 12 นาฬิกาหมุนตามเข็มจนครบวง
+  // รับประกันทิศทางและความลื่นไหลโดยไม่ขึ้นกับจำนวนสไลซ์หรือค่าที่เป็น 0
+  const sweepState = { progress: opts.clockwiseSweep ? 0 : 1 };
+  const sweepPlugin = {
+    id: 'clockwiseSweep',
+    beforeDraw(c: Chart) {
+      if (sweepState.progress >= 1) return;
+      const { top, bottom, left, right } = c.chartArea;
+      const cx = (left + right) / 2;
+      const cy = (top + bottom) / 2;
+      const radius = Math.max(right - left, bottom - top);
+      const startAngle = -Math.PI / 2;
+      const endAngle = startAngle + sweepState.progress * Math.PI * 2;
+      const c2 = c.ctx;
+      c2.save();
+      c2.beginPath();
+      c2.moveTo(cx, cy);
+      c2.arc(cx, cy, radius, startAngle, endAngle, false);
+      c2.closePath();
+      c2.clip();
+    },
+    afterDraw(c: Chart) {
+      if (sweepState.progress >= 1) return;
+      c.ctx.restore();
+    },
+  };
 
   const config: ChartConfiguration<'doughnut'> = {
     type: 'doughnut',
@@ -657,7 +1016,30 @@ function renderDonut(
       responsive: true,
       maintainAspectRatio: false,
       cutout: '62%',
-      animation: { duration: 700, easing: 'easeOutQuart' },
+      animation: opts.clockwiseSweep
+        ? false
+        : {
+            duration: 900,
+            easing: 'easeOutQuart',
+            // ทำให้แต่ละสไลซ์ทยอยไหลเข้ามาทีละชิ้นแทนที่จะขึ้นพร้อมกัน
+            delay: (context) => {
+              if (context.type === 'data' && context.mode === 'default' && !context.dropped) {
+                context.dropped = true;
+                const order = visibleOrder.indexOf(context.dataIndex);
+                return (order >= 0 ? order : 0) * 110;
+              }
+              return 0;
+            },
+          },
+      animations: opts.clockwiseSweep
+        ? undefined
+        : {
+            // ให้หมุนเข้าและขยายเข้าพร้อมกันแบบนุ่มนวล
+            numbers: {
+              type: 'number',
+              properties: ['circumference', 'endAngle'],
+            },
+          },
       plugins: {
         legend: {
           position: 'bottom',
@@ -680,9 +1062,24 @@ function renderDonut(
         },
       },
     },
+    plugins: opts.clockwiseSweep ? [sweepPlugin] : [],
   };
 
-  setInstance(new Chart(ctx, config));
+  const instance = new Chart(ctx, config);
+  setInstance(instance);
+
+  if (opts.clockwiseSweep) {
+    let start: number | null = null;
+    const duration = 1100;
+    const step = (ts: number) => {
+      if (start === null) start = ts;
+      const t = Math.min((ts - start) / duration, 1);
+      sweepState.progress = 1 - Math.pow(1 - t, 3);
+      instance.draw();
+      if (t < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
 }
 
 let resizeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -691,10 +1088,35 @@ function handleResize() {
   resizeTimer = setTimeout(async () => {
     await nextTick();
     if (ttrItems.value.length) {
-      renderDonut(ttrDonutRef, ttrDonutInstance, ttrItems.value.map((i) => i.drugitem?.name ?? i.icode), ttrItems.value.map((i) => i.ttr), tealShades, (inst) => (ttrDonutInstance = inst));
+      renderDonut(
+        ttrDonutRef,
+        ttrDonutInstance,
+        ttrItems.value.map((i) => i.drugitem?.name ?? i.icode),
+        ttrItems.value.map((i) => i.ttr),
+        tealShades,
+        (inst) => (ttrDonutInstance = inst)
+      );
     }
     if (dispensedItems.value.length) {
-      renderDonut(dispensedDonutRef, dispensedDonutInstance, dispensedItems.value.map((i) => i.drugitem?.name ?? i.icode), dispensedItems.value.map((i) => i.tr), coralShades, (inst) => (dispensedDonutInstance = inst));
+      renderDonut(
+        dispensedDonutRef,
+        dispensedDonutInstance,
+        dispensedItems.value.map((i) => i.drugitem?.name ?? i.icode),
+        dispensedItems.value.map((i) => i.tr),
+        coralShades,
+        (inst) => (dispensedDonutInstance = inst)
+      );
+    }
+    if (tdMonthlyItems.value.length) {
+      renderTdMonthlyChart();
+      renderDonut(
+        tdMonthlyDonutRef,
+        tdMonthlyDonutInstance,
+        tdMonthlyItems.value.map((i) => i['เดือน']),
+        tdMonthlyItems.value.map((i) => i.dvalue),
+        tdMonthlyItems.value.map((i) => ((i.dvalue || 0) >= tdMonthlyAverage.value ? trendHighColor : trendLowColor)),
+        (inst) => (tdMonthlyDonutInstance = inst)
+      );
     }
   }, 200);
 }
@@ -703,6 +1125,7 @@ onMounted(() => {
   fetchDashboardData();
   fetchTtrData();
   fetchDispensedData();
+  fetchTdMonthlyData();
   window.addEventListener('resize', handleResize);
 });
 
@@ -710,6 +1133,8 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize);
   if (ttrDonutInstance) ttrDonutInstance.destroy();
   if (dispensedDonutInstance) dispensedDonutInstance.destroy();
+  if (tdMonthlyChartInstance) tdMonthlyChartInstance.destroy();
+  if (tdMonthlyDonutInstance) tdMonthlyDonutInstance.destroy();
 });
 </script>
 
@@ -966,6 +1391,127 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
+/* ===================== MONTHLY TREND ===================== */
+.trend-card {
+  border-radius: 12px;
+  overflow: hidden;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.trend-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.trend-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--forest-900);
+}
+
+.trend-subtitle {
+  font-size: 12px;
+  color: #8b988f;
+  margin-top: 2px;
+  margin-left: 28px;
+}
+
+.trend-threshold-legend {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.trend-threshold-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #5c6b64;
+}
+
+.trend-threshold-dot {
+  flex-shrink: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.trend-threshold-dot--high {
+  background: #e2384a;
+}
+
+.trend-threshold-dot--low {
+  background: #e2a63d;
+}
+
+.trend-chart-section {
+  padding-top: 18px;
+}
+
+.trend-row {
+  align-items: center;
+}
+
+.trend-chart-wrap {
+  position: relative;
+  width: 100%;
+  height: 320px;
+}
+
+/* เผยกราฟเส้นจากซ้ายไปขวาด้วย CSS ล้วนๆ (แพทเทิร์นเดียวกับ rank-pill-fill) แทนที่จะพึ่งอนิเมชันภายในของ Chart.js */
+.trend-reveal {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  clip-path: inset(0 100% 0 0);
+  transition: clip-path 1.1s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.trend-reveal--in {
+  clip-path: inset(0 0 0 0);
+}
+
+.trend-donut-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--forest-700);
+  margin-bottom: 8px;
+}
+
+.trend-donut-wrap {
+  position: relative;
+  width: 100%;
+  height: 220px;
+}
+
+.trend-donut-wrap--tall {
+  height: 280px;
+}
+
+.trend-donut-reveal {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transform: scale(0.85);
+  transition: opacity 0.8s ease, transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.trend-donut-reveal--in {
+  opacity: 1;
+  transform: scale(1);
+}
+
 /* ===================== TOP 10 SIDE-BY-SIDE ===================== */
 .top-ten-row {
   max-width: 1400px;
@@ -1138,7 +1684,7 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
   padding-right: 10px;
   box-sizing: border-box;
-  transition: width 0.8s ease, transform 0.18s ease, filter 0.18s ease;
+  transition: width 0.9s cubic-bezier(0.22, 1, 0.36, 1), transform 0.18s ease, filter 0.18s ease;
   transform-origin: center;
 }
 
@@ -1224,6 +1770,22 @@ onBeforeUnmount(() => {
   }
   .rank-donut-wrap {
     height: 220px;
+  }
+  .trend-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .trend-subtitle {
+    margin-left: 0;
+  }
+  .trend-chart-wrap {
+    height: 240px;
+  }
+  .trend-donut-wrap {
+    height: 220px;
+  }
+  .trend-donut-wrap--tall {
+    height: 260px;
   }
 }
 </style>

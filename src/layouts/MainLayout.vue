@@ -50,7 +50,7 @@ const linksList: EssentialLinkProps[] = [
     label: 'แดชบอร์ด',
     caption: 'ภาพรวมระบบ',
     icon: 'insights',
-    to: '/second'
+    to: '/'
   },
   {
     label: 'คลังยา',

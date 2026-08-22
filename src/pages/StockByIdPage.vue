@@ -205,13 +205,13 @@
         </div>
       </div>
 
-      <!-- ═══ แนวโน้มจำนวนจ่ายออกรายเดือน (tr) — เทียบกับ HOSXP ═══ -->
+      <!-- ═══ แนวโน้มจำนวนจ่ายออกรายเดือน (tr) — เทียบกับ HOSXP / HOSXP PCU ═══ -->
       <div class="panel">
         <div class="panel__head">
           <div>
             <div class="panel__title">
               <q-icon name="show_chart" size="20px" color="teal-7" class="q-mr-xs" />
-              แนวโน้มจำนวนจ่ายออกรายเดือน (tr) เทียบกับ HOSXP
+              แนวโน้มจำนวนจ่ายออกรายเดือน (tr) เทียบกับ HOSXP / HOSXP PCU
             </div>
             <div class="panel__sub">{{ compareSubLabel }} · หน่วย {{ drug?.units || '' }}</div>
           </div>
@@ -237,6 +237,10 @@
         <div v-if="exportHosxpHasError" class="hosxp-warning">
           <q-icon name="warning" size="14px" color="warning" />
           ไม่สามารถโหลดข้อมูล HOSXP เพื่อเปรียบเทียบได้ (แสดงเฉพาะข้อมูลระบบ)
+        </div>
+        <div v-if="exportHosxpPCUHasError" class="hosxp-warning">
+          <q-icon name="warning" size="14px" color="warning" />
+          ไม่สามารถโหลดข้อมูล HOSXP PCU เพื่อเปรียบเทียบได้
         </div>
       </div>
     </div>
@@ -332,6 +336,16 @@ interface ExportMonthlyItem {
 
 /** ข้อมูลจาก /backoffice/dashboard/exportHosxp — ใช้เปรียบเทียบ tr กับระบบ HOSXP */
 interface ExportHosxpItem {
+  yearmonth: string
+  'ปีงบประมาณ': number
+  'เดือน': string
+  'จำนวนรายการ': number
+  tr: number
+  rvalue: number
+}
+
+/** ข้อมูลจาก /backoffice/dashboard/exportHosxpPCU — ใช้เปรียบเทียบ tr กับระบบ HOSXP PCU */
+interface ExportHosxpPCUItem {
   yearmonth: string
   'ปีงบประมาณ': number
   'เดือน': string
@@ -702,14 +716,16 @@ async function fetchCompare(): Promise<void> {
 }
 
 /* ════════════════════════════════════════════════
-   แนวโน้มจำนวนจ่ายออกรายเดือน (tr) — เทียบกับ HOSXP (Linear Graph)
+   แนวโน้มจำนวนจ่ายออกรายเดือน (tr) — เทียบกับ HOSXP / HOSXP PCU (Linear Graph)
    ════════════════════════════════════════════════ */
 
 const exportLoading = ref(true)
 const exportHasError = ref(false)
 const exportLabels = ref<string[]>([])
-/** true เมื่อโหลด /exportHosxp ไม่สำเร็จ — กราฟจะยังแสดงเฉพาะเส้นระบบได้ */
+/** true เมื่อโหลด /exportHosxp ไม่สำเร็จ — กราฟจะยังแสดงเฉพาะเส้นระบบ/PCU ที่เหลือได้ */
 const exportHosxpHasError = ref(false)
+/** true เมื่อโหลด /exportHosxpPCU ไม่สำเร็จ — กราฟจะยังแสดงเฉพาะเส้นระบบ/HOSXP ที่เหลือได้ */
+const exportHosxpPCUHasError = ref(false)
 
 const exportChartRef = ref<HTMLCanvasElement | null>(null)
 let exportChart: Chart | null = null
@@ -741,8 +757,13 @@ function observeExportResize(canvas: HTMLCanvasElement, chart: Chart): void {
   exportResizeObserver.observe(parent)
 }
 
-/** กราฟเส้นแสดงจำนวนจ่ายออก (tr) รายเดือน — เส้นระบบ vs เส้น HOSXP */
-function renderExportChart(labels: string[], trSystem: number[], trHosxp: number[] | null): void {
+/** กราฟเส้นแสดงจำนวนจ่ายออก (tr) รายเดือน — เส้นระบบ vs เส้น HOSXP vs เส้น HOSXP PCU */
+function renderExportChart(
+  labels: string[],
+  trSystem: number[],
+  trHosxp: number[] | null,
+  trHosxpPCU: number[] | null
+): void {
   destroyExportChart()
   if (!exportChartRef.value) return
   const mobile = isMobile()
@@ -777,6 +798,24 @@ function renderExportChart(labels: string[], trSystem: number[], trHosxp: number
       pointHoverRadius: 6,
       borderWidth: 2.5,
       borderDash: [6, 4],
+      tension: 0.35,
+      fill: false
+    })
+  }
+
+  if (trHosxpPCU) {
+    datasets.push({
+      label: 'จำนวนจ่ายออก (HOSXP PCU)',
+      data: trHosxpPCU,
+      borderColor: '#6a4c93',
+      backgroundColor: 'rgba(106, 76, 147, 0.1)',
+      pointBackgroundColor: '#6a4c93',
+      pointBorderColor: '#fff',
+      pointBorderWidth: 1.5,
+      pointRadius: 4,
+      pointHoverRadius: 6,
+      borderWidth: 2.5,
+      borderDash: [2, 3],
       tension: 0.35,
       fill: false
     })
@@ -834,14 +873,17 @@ async function fetchExport(): Promise<void> {
   exportLoading.value = true
   exportHasError.value = false
   exportHosxpHasError.value = false
+  exportHosxpPCUHasError.value = false
   try {
     const params: Record<string, string | number> = { icode, financialYear: fiscalYear.value }
     if (selectedMonth.value) params.month = selectedMonth.value
 
-    // ใช้ allSettled: ข้อมูลระบบ (/export) คือแหล่งหลัก ถ้า /exportHosxp พังยังแสดงเส้นระบบได้ตามปกติ
-    const [systemResult, hosxpResult] = await Promise.allSettled([
+    // ใช้ allSettled: ข้อมูลระบบ (/export) คือแหล่งหลัก ถ้า /exportHosxp หรือ /exportHosxpPCU พัง
+    // ยังแสดงเส้นที่เหลือได้ตามปกติ
+    const [systemResult, hosxpResult, hosxpPCUResult] = await Promise.allSettled([
       api.get<ExportMonthlyItem[]>('/backoffice/dashboard/export', { params }),
-      api.get<ExportHosxpItem[]>('/backoffice/dashboard/exportHosxp', { params })
+      api.get<ExportHosxpItem[]>('/backoffice/dashboard/exportHosxp', { params }),
+      api.get<ExportHosxpPCUItem[]>('/backoffice/dashboard/exportHosxpPCU', { params })
     ])
 
     if (systemResult.status === 'rejected') throw systemResult.reason
@@ -860,12 +902,24 @@ async function fetchExport(): Promise<void> {
       console.error('[StockDetail] fetchExport (hosxp):', hosxpResult.reason)
     }
 
+    let hosxpPCUTr: number[] | null = null
+    if (hosxpPCUResult.status === 'fulfilled') {
+      const hosxpPCUItems = hosxpPCUResult.value.data ?? []
+      // จับคู่ค่าตาม yearmonth เช่นเดียวกับ HOSXP เผื่อจำนวนเดือนไม่เท่ากับข้อมูลระบบ
+      const hosxpPCUByYearMonth = new Map(hosxpPCUItems.map((i) => [i.yearmonth, i.tr]))
+      hosxpPCUTr = items.map((i) => hosxpPCUByYearMonth.get(i.yearmonth) ?? 0)
+    } else {
+      exportHosxpPCUHasError.value = true
+      console.error('[StockDetail] fetchExport (hosxpPCU):', hosxpPCUResult.reason)
+    }
+
     exportLoading.value = false
     await nextTick()
     renderExportChart(
       exportLabels.value,
       items.map((i) => i.tr),
-      hosxpTr
+      hosxpTr,
+      hosxpPCUTr
     )
   } catch (e) {
     console.error('[StockDetail] fetchExport:', e)
